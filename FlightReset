@@ -2,7 +2,7 @@
 #set -x
 
 TOOL_NAME="Microsoft Outlook 2016 for Mac Flight Reset Tool"
-TOOL_VERSION="1.0"
+TOOL_VERSION="1.1"
 
 ## Copyright (c) 2017 Microsoft Corp. All rights reserved.
 ## Scripts are not supported under any Microsoft standard support program or service. The scripts are provided AS IS without warranty of any kind.
@@ -44,6 +44,13 @@ function CheckLaunchState {
 	else
 		echo "0"
 	fi
+}
+
+function ContactURL {
+# Check to see if we get a response from a URL request
+	local URL="$1"
+	URLRESULT=$(curl --head -s $URL | awk '/HTTP\/1.1/' | cut -d ' ' -f3)
+	echo $URLRESULT
 }
 
 function GetNodeId {
@@ -103,6 +110,9 @@ fi
 ## Main
 # Check that MicrosoftRegistryDB.reg actually exists.
 CheckRegistryExists
+# Check to see if the flighting server is online
+FLIGHTRESPONSE=$(ContactURL "https://client-office365-tas.msedge.net/ab?")
+echo "Contacting flighting server: $FLIGHTRESPONSE"
 # Walk the registry to find the id of the node that we need
 KEY_SOFTWARE=$(GetNodeId "Software" '-1')
 KEY_MICROSOFT=$(GetNodeId "Microsoft" "$KEY_SOFTWARE")
@@ -120,6 +130,34 @@ fi
 KEY_ETAG=($GetNodeVal "ETag" "$KEY_OUTLOOK")
 if [ "$KEY_ETAG" != "0" ]; then
 	DeleteValue "ETag" "$KEY_OUTLOOK"
+fi
+KEY_IMPRESSION=($GetNodeVal "ImpressionId" "$KEY_OUTLOOK")
+if [ "$KEY_IMPRESSION" != "0" ]; then
+	DeleteValue "ImpressionId" "$KEY_OUTLOOK"
+fi
+KEY_EXPIRES=($GetNodeVal "Expires" "$KEY_OUTLOOK")
+if [ "$KEY_EXPIRES" != "0" ]; then
+	DeleteValue "Expires" "$KEY_OUTLOOK"
+fi
+KEY_DEFERRED=($GetNodeVal "DeferredConfigs" "$KEY_OUTLOOK")
+if [ "$KEY_DEFERRED" != "0" ]; then
+	DeleteValue "DeferredConfigs" "$KEY_OUTLOOK"
+fi
+KEY_CONFIGID=($GetNodeVal "ConfigIds" "$KEY_OUTLOOK")
+if [ "$KEY_CONFIGID" != "0" ]; then
+	DeleteValue "ConfigIds" "$KEY_OUTLOOK"
+fi
+KEY_NUMBERLINES=($GetNodeVal "FlightNumberlines" "$KEY_OUTLOOK")
+if [ "$KEY_NUMBERLINES" != "0" ]; then
+	DeleteValue "FlightNumberlines" "$KEY_OUTLOOK"
+fi
+KEY_TASREQ=($GetNodeVal "TasRequestPending" "$KEY_OUTLOOK")
+if [ "$KEY_TASREQ" != "0" ]; then
+	DeleteValue "TasRequestPending" "$KEY_OUTLOOK"
+fi
+KEY_FLVER=($GetNodeVal "FlightingVersion" "$KEY_OUTLOOK")
+if [ "$KEY_FLVER" != "0" ]; then
+	DeleteValue "FlightingVersion" "$KEY_OUTLOOK"
 fi
 
 echo "Existing flight data removed."
