@@ -2,7 +2,7 @@
 #set -x
 
 TOOL_NAME="Microsoft Outlook 2016 for Mac Flight Reset Tool"
-TOOL_VERSION="1.2"
+TOOL_VERSION="1.3"
 
 ## Copyright (c) 2018 Microsoft Corp. All rights reserved.
 ## Scripts are not supported under any Microsoft standard support program or service. The scripts are provided AS IS without warranty of any kind.
@@ -49,7 +49,7 @@ function CheckLaunchState {
 function ContactURL {
 # Check to see if we get a response from a URL request
 	local URL="$1"
-	URLRESULT=$(curl --head -s $URL | awk '/HTTP\/1.1/' | cut -d ' ' -f3)
+	URLRESULT=$(curl --head -s $URL | awk '/HTTP/' | cut -d ' ' -f3)
 	echo $URLRESULT
 }
 
