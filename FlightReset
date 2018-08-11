@@ -1,8 +1,8 @@
 #!/bin/sh
 #set -x
 
-TOOL_NAME="Microsoft Outlook 2016 for Mac Flight Reset Tool"
-TOOL_VERSION="1.3"
+TOOL_NAME="Microsoft Office 365/2019/2016 for Mac Flight Reset Tool"
+TOOL_VERSION="2.0"
 
 ## Copyright (c) 2018 Microsoft Corp. All rights reserved.
 ## Scripts are not supported under any Microsoft standard support program or service. The scripts are provided AS IS without warranty of any kind.
@@ -16,13 +16,17 @@ TOOL_VERSION="1.3"
 
 # Constants
 REGISTRY="$HOME/Library/Group Containers/UBF8T346G9.Office/MicrosoftRegistrationDB.reg"
+WORD2016PATH="/Applications/Microsoft Word.app"
+EXCEL2016PATH="/Applications/Microsoft Excel.app"
+POWERPOINT2016PATH="/Applications/Microsoft PowerPoint.app"
 OUTLOOK2016PATH="/Applications/Microsoft Outlook.app"
+ONENOTE2016PATH="/Applications/Microsoft OneNote.app"
 SCRIPTPATH=$( cd $(dirname $0) ; pwd -P )
 
 function ShowUsage {
 # Shows tool usage and parameters
 	echo $TOOL_NAME - $TOOL_VERSION
-	echo "Purpose: Resets the flighting configuration for Outlook 2016 for Mac"
+	echo "Purpose: Resets the flighting configuration for Office 365/2019/2016 for Mac apps"
 	echo "Usage: FlightReset"
 	echo
 	exit 0
@@ -49,7 +53,7 @@ function CheckLaunchState {
 function ContactURL {
 # Check to see if we get a response from a URL request
 	local URL="$1"
-	URLRESULT=$(curl --head -s $URL | awk '/HTTP/' | cut -d ' ' -f3)
+	URLRESULT=$(curl --head -s $URL | awk '/HTTP/' | cut -d ' ' -f2)
 	echo $URLRESULT
 }
 
@@ -77,27 +81,53 @@ function GetNodeVal {
 	fi
 }
 
-function InsertNode {
-# Insert new node into Registry
-	local NAME="$1"
-	local PARENT="$2"
-	sqlite3 "$REGISTRY" "INSERT INTO HKEY_CURRENT_USER ('parent_id','name') VALUES ($PARENT,'$NAME');"
-}
-
-function InsertValue {
-# Insert new value into Registry
-	local NODE="$1"
-	local NAME="$2"
-	local TYPE="$3"
-	local VALUE="$4"
-	sqlite3 "$REGISTRY" "INSERT INTO HKEY_CURRENT_USER_values ('node_id','name','type','value') VALUES ($NODE,'$NAME',$TYPE,'$VALUE');"
-}
-
 function DeleteValue {
 # Delete value from Registry
 	local NAME="$1"
 	local NODEID="$2"
 	sqlite3 "$REGISTRY" "DELETE FROM HKEY_CURRENT_USER_values WHERE name='$NAME' and node_id=$NODEID;"
+}
+
+function RemoveFlightData {
+# Remove all flighting keys from the specified app
+	local KEY_APP="$1"
+	# If the flight keys are set, remove the existing values
+	KEY_UPDATETIME=($GetNodeVal "FlightUpdateTime" "$KEY_APP")
+	if [ "$KEY_UPDATETIME" != "0" ]; then
+		DeleteValue "FlightUpdateTime" "$KEY_APP"
+	fi
+	KEY_ETAG=($GetNodeVal "ETag" "$KEY_APP")
+	if [ "$KEY_ETAG" != "0" ]; then
+		DeleteValue "ETag" "$KEY_APP"
+	fi
+	KEY_IMPRESSION=($GetNodeVal "ImpressionId" "$KEY_APP")
+	if [ "$KEY_IMPRESSION" != "0" ]; then
+		DeleteValue "ImpressionId" "$KEY_APP"
+	fi
+	KEY_EXPIRES=($GetNodeVal "Expires" "$KEY_APP")
+	if [ "$KEY_EXPIRES" != "0" ]; then
+		DeleteValue "Expires" "$KEY_APP"
+	fi
+	KEY_DEFERRED=($GetNodeVal "DeferredConfigs" "$KEY_APP")
+	if [ "$KEY_DEFERRED" != "0" ]; then
+		DeleteValue "DeferredConfigs" "$KEY_APP"
+	fi
+	KEY_CONFIGID=($GetNodeVal "ConfigIds" "$KEY_APP")
+	if [ "$KEY_CONFIGID" != "0" ]; then
+		DeleteValue "ConfigIds" "$KEY_APP"
+	fi
+	KEY_NUMBERLINES=($GetNodeVal "FlightNumberlines" "$KEY_APP")
+	if [ "$KEY_NUMBERLINES" != "0" ]; then
+		DeleteValue "FlightNumberlines" "$KEY_APP"
+	fi
+	KEY_TASREQ=($GetNodeVal "TasRequestPending" "$KEY_APP")
+	if [ "$KEY_TASREQ" != "0" ]; then
+		DeleteValue "TasRequestPending" "$KEY_APP"
+	fi
+	KEY_FLVER=($GetNodeVal "FlightingVersion" "$KEY_APP")
+	if [ "$KEY_FLVER" != "0" ]; then
+		DeleteValue "FlightingVersion" "$KEY_APP"
+	fi
 }
 
 # Evaluate command-line arguments
@@ -120,52 +150,42 @@ KEY_OFFICE=$(GetNodeId "Office" "$KEY_MICROSOFT")
 KEY_VERSION=$(GetNodeId "16.0" "$KEY_OFFICE")
 KEY_COMMON=$(GetNodeId "Common" "$KEY_VERSION")
 KEY_TAS=$(GetNodeId "ExperimentTAS" "$KEY_COMMON")
+KEY_WORD=$(GetNodeId "word" "$KEY_TAS")
+KEY_EXCEL=$(GetNodeId "excel" "$KEY_TAS")
+KEY_POWERPOINT=$(GetNodeId "powerpoint" "$KEY_TAS")
 KEY_OUTLOOK=$(GetNodeId "outlook" "$KEY_TAS")
+KEY_ONENOTE=$(GetNodeId "onenote" "$KEY_TAS")
+KEY_LICENSING=$(GetNodeId "licensingdaemon" "$KEY_TAS")
 
-# If the flight keys are set, remove the existing values
-KEY_UPDATETIME=($GetNodeVal "FlightUpdateTime" "$KEY_OUTLOOK")
-if [ "$KEY_UPDATETIME" != "0" ]; then
-	DeleteValue "FlightUpdateTime" "$KEY_OUTLOOK"
-fi
-KEY_ETAG=($GetNodeVal "ETag" "$KEY_OUTLOOK")
-if [ "$KEY_ETAG" != "0" ]; then
-	DeleteValue "ETag" "$KEY_OUTLOOK"
-fi
-KEY_IMPRESSION=($GetNodeVal "ImpressionId" "$KEY_OUTLOOK")
-if [ "$KEY_IMPRESSION" != "0" ]; then
-	DeleteValue "ImpressionId" "$KEY_OUTLOOK"
-fi
-KEY_EXPIRES=($GetNodeVal "Expires" "$KEY_OUTLOOK")
-if [ "$KEY_EXPIRES" != "0" ]; then
-	DeleteValue "Expires" "$KEY_OUTLOOK"
-fi
-KEY_DEFERRED=($GetNodeVal "DeferredConfigs" "$KEY_OUTLOOK")
-if [ "$KEY_DEFERRED" != "0" ]; then
-	DeleteValue "DeferredConfigs" "$KEY_OUTLOOK"
-fi
-KEY_CONFIGID=($GetNodeVal "ConfigIds" "$KEY_OUTLOOK")
-if [ "$KEY_CONFIGID" != "0" ]; then
-	DeleteValue "ConfigIds" "$KEY_OUTLOOK"
-fi
-KEY_NUMBERLINES=($GetNodeVal "FlightNumberlines" "$KEY_OUTLOOK")
-if [ "$KEY_NUMBERLINES" != "0" ]; then
-	DeleteValue "FlightNumberlines" "$KEY_OUTLOOK"
-fi
-KEY_TASREQ=($GetNodeVal "TasRequestPending" "$KEY_OUTLOOK")
-if [ "$KEY_TASREQ" != "0" ]; then
-	DeleteValue "TasRequestPending" "$KEY_OUTLOOK"
-fi
-KEY_FLVER=($GetNodeVal "FlightingVersion" "$KEY_OUTLOOK")
-if [ "$KEY_FLVER" != "0" ]; then
-	DeleteValue "FlightingVersion" "$KEY_OUTLOOK"
-fi
+RemoveFlightData "$KEY_WORD"
+RemoveFlightData "$KEY_EXCEL"
+RemoveFlightData "$KEY_POWERPOINT"
+RemoveFlightData "$KEY_OUTLOOK"
+RemoveFlightData "$KEY_ONENOTE"
+RemoveFlightData "$KEY_LICENSING"
 
 echo "Existing flight data removed."
 
-# If Outlook is already running, show a warning that the settings won't take effect until a restart occurs
-RUNSTATE=$(CheckLaunchState "$OUTLOOK2016PATH")
-if [ "$RUNSTATE" == "1" ]; then
+# If Office apps are already running, show a warning that the settings won't take effect until a restart occurs
+WORDRUNSTATE=$(CheckLaunchState "$WORD2016PATH")
+if [ "$WORDRUNSTATE" == "1" ]; then
+	echo "Word must be restarted to refresh the flight settings."
+fi
+EXCELRUNSTATE=$(CheckLaunchState "$EXCEL2016PATH")
+if [ "$EXCELRUNSTATE" == "1" ]; then
+	echo "Excel must be restarted to refresh the flight settings."
+fi
+POWERPOINTRUNSTATE=$(CheckLaunchState "$POWERPOINT2016PATH")
+if [ "$POWERPOINTRUNSTATE" == "1" ]; then
+	echo "PowerPoint must be restarted to refresh the flight settings."
+fi
+OUTLOOKRUNSTATE=$(CheckLaunchState "$OUTLOOK2016PATH")
+if [ "$OUTLOOKRUNSTATE" == "1" ]; then
 	echo "Outlook must be restarted to refresh the flight settings."
+fi
+ONENOTERUNSTATE=$(CheckLaunchState "$ONENOTE2016PATH")
+if [ "$ONENOTERUNSTATE" == "1" ]; then
+	echo "OneNote must be restarted to refresh the flight settings."
 fi
 
 
