@@ -2,9 +2,9 @@
 #set -x
 
 TOOL_NAME="Microsoft Office 365/2019/2016 for Mac Flight Reset Tool"
-TOOL_VERSION="2.0"
+TOOL_VERSION="3.0"
 
-## Copyright (c) 2018 Microsoft Corp. All rights reserved.
+## Copyright (c) 2019 Microsoft Corp. All rights reserved.
 ## Scripts are not supported under any Microsoft standard support program or service. The scripts are provided AS IS without warranty of any kind.
 ## Microsoft disclaims all implied warranties including, without limitation, any implied warranties of merchantability or of fitness for a 
 ## particular purpose. The entire risk arising out of the use or performance of the scripts and documentation remains with you. In no event shall
@@ -16,12 +16,11 @@ TOOL_VERSION="2.0"
 
 # Constants
 REGISTRY="$HOME/Library/Group Containers/UBF8T346G9.Office/MicrosoftRegistrationDB.reg"
-WORD2016PATH="/Applications/Microsoft Word.app"
-EXCEL2016PATH="/Applications/Microsoft Excel.app"
-POWERPOINT2016PATH="/Applications/Microsoft PowerPoint.app"
-OUTLOOK2016PATH="/Applications/Microsoft Outlook.app"
-ONENOTE2016PATH="/Applications/Microsoft OneNote.app"
-SCRIPTPATH=$( cd $(dirname $0) ; pwd -P )
+WORDPATH="/Applications/Microsoft Word.app"
+EXCELPATH="/Applications/Microsoft Excel.app"
+POWERPOINTPATH="/Applications/Microsoft PowerPoint.app"
+OUTLOOKPATH="/Applications/Microsoft Outlook.app"
+ONENOTEPATH="/Applications/Microsoft OneNote.app"
 
 function ShowUsage {
 # Shows tool usage and parameters
@@ -48,13 +47,6 @@ function CheckLaunchState {
 	else
 		echo "0"
 	fi
-}
-
-function ContactURL {
-# Check to see if we get a response from a URL request
-	local URL="$1"
-	URLRESULT=$(curl --head -s $URL | awk '/HTTP/' | cut -d ' ' -f2)
-	echo $URLRESULT
 }
 
 function GetNodeId {
@@ -88,21 +80,19 @@ function DeleteValue {
 	sqlite3 "$REGISTRY" "DELETE FROM HKEY_CURRENT_USER_values WHERE name='$NAME' and node_id=$NODEID;"
 }
 
+function DeleteNode {
+# Delete node and all contained values from Registry
+	local NODEID="$1"
+	sqlite3 "$REGISTRY" "DELETE FROM HKEY_CURRENT_USER_values WHERE node_id=$NODEID;"
+}
+
 function RemoveFlightData {
 # Remove all flighting keys from the specified app
 	local KEY_APP="$1"
 	# If the flight keys are set, remove the existing values
-	KEY_UPDATETIME=($GetNodeVal "FlightUpdateTime" "$KEY_APP")
-	if [ "$KEY_UPDATETIME" != "0" ]; then
-		DeleteValue "FlightUpdateTime" "$KEY_APP"
-	fi
 	KEY_ETAG=($GetNodeVal "ETag" "$KEY_APP")
 	if [ "$KEY_ETAG" != "0" ]; then
 		DeleteValue "ETag" "$KEY_APP"
-	fi
-	KEY_IMPRESSION=($GetNodeVal "ImpressionId" "$KEY_APP")
-	if [ "$KEY_IMPRESSION" != "0" ]; then
-		DeleteValue "ImpressionId" "$KEY_APP"
 	fi
 	KEY_EXPIRES=($GetNodeVal "Expires" "$KEY_APP")
 	if [ "$KEY_EXPIRES" != "0" ]; then
@@ -116,74 +106,102 @@ function RemoveFlightData {
 	if [ "$KEY_CONFIGID" != "0" ]; then
 		DeleteValue "ConfigIds" "$KEY_APP"
 	fi
-	KEY_NUMBERLINES=($GetNodeVal "FlightNumberlines" "$KEY_APP")
-	if [ "$KEY_NUMBERLINES" != "0" ]; then
-		DeleteValue "FlightNumberlines" "$KEY_APP"
-	fi
-	KEY_TASREQ=($GetNodeVal "TasRequestPending" "$KEY_APP")
-	if [ "$KEY_TASREQ" != "0" ]; then
-		DeleteValue "TasRequestPending" "$KEY_APP"
-	fi
-	KEY_FLVER=($GetNodeVal "FlightingVersion" "$KEY_APP")
-	if [ "$KEY_FLVER" != "0" ]; then
-		DeleteValue "FlightingVersion" "$KEY_APP"
-	fi
 }
 
 # Evaluate command-line arguments
-if [[ $# = 0 ]]; then
-	RUNMODE=true
-else
-	ShowUsage
-fi
+for KEY in "$@"; do
+	case $KEY in
+    	--Help|-h|--help)
+    	ShowUsage
+    	shift # past argument
+    	;;
+    esac
+	shift # past argument or value
+done
 
 ## Main
 # Check that MicrosoftRegistryDB.reg actually exists.
 CheckRegistryExists
-# Check to see if the flighting server is online
-FLIGHTRESPONSE=$(ContactURL "https://client-office365-tas.msedge.net/ab?")
-echo "Contacting flighting server: $FLIGHTRESPONSE"
 # Walk the registry to find the id of the node that we need
 KEY_SOFTWARE=$(GetNodeId "Software" '-1')
 KEY_MICROSOFT=$(GetNodeId "Microsoft" "$KEY_SOFTWARE")
 KEY_OFFICE=$(GetNodeId "Office" "$KEY_MICROSOFT")
 KEY_VERSION=$(GetNodeId "16.0" "$KEY_OFFICE")
 KEY_COMMON=$(GetNodeId "Common" "$KEY_VERSION")
-KEY_TAS=$(GetNodeId "ExperimentTAS" "$KEY_COMMON")
-KEY_WORD=$(GetNodeId "word" "$KEY_TAS")
-KEY_EXCEL=$(GetNodeId "excel" "$KEY_TAS")
-KEY_POWERPOINT=$(GetNodeId "powerpoint" "$KEY_TAS")
-KEY_OUTLOOK=$(GetNodeId "outlook" "$KEY_TAS")
-KEY_ONENOTE=$(GetNodeId "onenote" "$KEY_TAS")
-KEY_LICENSING=$(GetNodeId "licensingdaemon" "$KEY_TAS")
+KEY_ECS=$(GetNodeId "ExperimentEcs" "$KEY_COMMON")
+KEY_WORD=$(GetNodeId "word" "$KEY_ECS")
+KEY_WORD_FLIGHTS=$(GetNodeId "Flights" "$KEY_WORD")
+KEY_EXCEL=$(GetNodeId "excel" "$KEY_ECS")
+KEY_EXCEL_FLIGHTS=$(GetNodeId "Flights" "$KEY_EXCEL")
+KEY_POWERPOINT=$(GetNodeId "powerpoint" "$KEY_ECS")
+KEY_POWERPOINT_FLIGHTS=$(GetNodeId "Flights" "$KEY_POWERPOINT")
+KEY_OUTLOOK=$(GetNodeId "outlook" "$KEY_ECS")
+KEY_OUTLOOK_FLIGHTS=$(GetNodeId "Flights" "$KEY_OUTLOOK")
+KEY_ONENOTE=$(GetNodeId "onenote" "$KEY_ECS")
+KEY_ONENOTE_FLIGHTS=$(GetNodeId "Flights" "$KEY_ONENOTE")
+KEY_LICENSING=$(GetNodeId "licensingdaemon" "$KEY_ECS")
+KEY_LICENSING_FLIGHTS=$(GetNodeId "Flights" "$KEY_LICENSING")
+
+KEY_EX_CONFIGS=$(GetNodeId "ExperimentConfigs" "$KEY_COMMON")
+KEY_EX_ECS=$(GetNodeId "Ecs" "$KEY_EX_CONFIGS")
+KEY_EX_ECS_WORD=$(GetNodeId "word" "$KEY_EX_ECS")
+KEY_EX_ECS_WORD_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_WORD")
+KEY_EX_ECS_EXCEL=$(GetNodeId "excel" "$KEY_EX_ECS")
+KEY_EX_ECS_EXCEL_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_EXCEL")
+KEY_EX_ECS_POWERPOINT=$(GetNodeId "powerpoint" "$KEY_EX_ECS")
+KEY_EX_ECS_POWERPOINT_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_POWERPOINT")
+KEY_EX_ECS_OUTLOOK=$(GetNodeId "outlook" "$KEY_EX_ECS")
+KEY_EX_ECS_OUTLOOK_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_OUTLOOK")
+KEY_EX_ECS_ONENOTE=$(GetNodeId "onenote" "$KEY_EX_ECS")
+KEY_EX_ECS_ONENOTE_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_ONENOTE")
+KEY_EX_ECS_LICENSING=$(GetNodeId "licensingdaemon" "$KEY_EX_ECS")
+KEY_EX_ECS_LICENSING_CCD=$(GetNodeId "ConfigContextData" "$KEY_EX_ECS_LICENSING")
 
 RemoveFlightData "$KEY_WORD"
+RemoveFlightData "$KEY_EX_ECS_WORD"
+DeleteNode "$KEY_WORD_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_WORD_CCD"
 RemoveFlightData "$KEY_EXCEL"
+RemoveFlightData "$KEY_EX_ECS_EXCEL"
+DeleteNode "$KEY_EXCEL_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_EXCEL_CCD"
 RemoveFlightData "$KEY_POWERPOINT"
+RemoveFlightData "$KEY_EX_ECS_POWERPOINT"
+DeleteNode "$KEY_POWERPOINT_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_POWERPOINT_CCD"
 RemoveFlightData "$KEY_OUTLOOK"
+RemoveFlightData "$KEY_EX_ECS_OUTLOOK"
+DeleteNode "$KEY_OUTLOOK_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_OUTLOOK_CCD"
 RemoveFlightData "$KEY_ONENOTE"
+RemoveFlightData "$KEY_EX_ECS_ONENOTE"
+DeleteNode "$KEY_ONENOTE_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_ONENOTE_CCD"
 RemoveFlightData "$KEY_LICENSING"
+RemoveFlightData "$KEY_EX_ECS_LICENSING"
+DeleteNode "$KEY_LICENSING_FLIGHTS"
+DeleteNode "$KEY_EX_ECS_LICENSING_CCD"
 
 echo "Existing flight data removed."
 
 # If Office apps are already running, show a warning that the settings won't take effect until a restart occurs
-WORDRUNSTATE=$(CheckLaunchState "$WORD2016PATH")
+WORDRUNSTATE=$(CheckLaunchState "$WORDPATH")
 if [ "$WORDRUNSTATE" == "1" ]; then
 	echo "Word must be restarted to refresh the flight settings."
 fi
-EXCELRUNSTATE=$(CheckLaunchState "$EXCEL2016PATH")
+EXCELRUNSTATE=$(CheckLaunchState "$EXCELPATH")
 if [ "$EXCELRUNSTATE" == "1" ]; then
 	echo "Excel must be restarted to refresh the flight settings."
 fi
-POWERPOINTRUNSTATE=$(CheckLaunchState "$POWERPOINT2016PATH")
+POWERPOINTRUNSTATE=$(CheckLaunchState "$POWERPOINTPATH")
 if [ "$POWERPOINTRUNSTATE" == "1" ]; then
 	echo "PowerPoint must be restarted to refresh the flight settings."
 fi
-OUTLOOKRUNSTATE=$(CheckLaunchState "$OUTLOOK2016PATH")
+OUTLOOKRUNSTATE=$(CheckLaunchState "$OUTLOOKPATH")
 if [ "$OUTLOOKRUNSTATE" == "1" ]; then
 	echo "Outlook must be restarted to refresh the flight settings."
 fi
-ONENOTERUNSTATE=$(CheckLaunchState "$ONENOTE2016PATH")
+ONENOTERUNSTATE=$(CheckLaunchState "$ONENOTEPATH")
 if [ "$ONENOTERUNSTATE" == "1" ]; then
 	echo "OneNote must be restarted to refresh the flight settings."
 fi
